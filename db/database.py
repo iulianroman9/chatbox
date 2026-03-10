@@ -1,10 +1,9 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 
 def create_sql_lite_engine(path: str | None = None):

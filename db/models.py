@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, Integer, String, func
-from database import Base
+from db.database import Base
 
 
 class UserRecord(Base):
@@ -10,5 +10,5 @@ class UserRecord(Base):
     name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
-    password_hash = Column(String, nullable=True)
+    password_hash = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
