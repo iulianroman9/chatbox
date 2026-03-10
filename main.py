@@ -1,21 +1,26 @@
 from fastapi import FastAPI
+from api.routes import users
 
 app = FastAPI()
+app.include_router(users.router)
+
+# from pydantic import BaseModel
+# class Item(BaseModel):
+#     name: str
+#     price: float
+#     is_offer: bool | None = None
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+# @app.get("/")
+# def read_root():
+#     return {"Hello": "World"}
 
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str | None = None):
-    return {"item_id": item_id, "q": q}
+# @app.get("/items/{item_id}")
+# def read_item(item_id: int, q: str | None = None):
+#     return {"item_id": item_id, "q": q}
 
 
-def main():
-    print("Hello from chatbox!")
-
-
-if __name__ == "__main__":
-    main()
+# @app.put("/items/{item_id}")
+# def update_item(item_id: int, item: Item):
+#     return {"item_name": item.name, "item_id": item_id}
