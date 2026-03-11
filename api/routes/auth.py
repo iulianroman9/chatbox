@@ -4,6 +4,7 @@ from models.token import TokenResponse
 from sqlalchemy.orm import Session
 from db.database import get_db
 from api.services import user as user_service
+from api.security.jwt_token import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -25,6 +26,7 @@ def signup(user_create: UserCreate, db: Session = Depends(get_db)):
         )
 
     user = user_service.create_user(db, user_create)
-    access_token = "fake token"
+
+    access_token = create_access_token({"id": user.id})
 
     return {"user": UserResponse.model_validate(user), "access_token": access_token}
