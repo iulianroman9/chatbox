@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException
-from api.schemas.user import UserCreate, UserResponse, UserUpdate
+from models.user import UserCreate, UserResponse, UserUpdate
 from sqlalchemy.orm import Session
 from api.services import user as user_service
 from db.database import get_db
