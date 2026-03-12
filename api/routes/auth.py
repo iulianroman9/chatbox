@@ -4,8 +4,8 @@ from models.token import TokenResponse
 from sqlalchemy.orm import Session
 from db.database import get_db
 from api.services import user as user_service
-from api.security.jwt_token import create_access_token
-from api.security.hash import verify_password
+from utils.security.jwt_token import create_access_token
+from utils.security.hash import verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

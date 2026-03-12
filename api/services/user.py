@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from db.models import UserRecord
 from models.user import UserCreate, UserUpdate
-from api.security.hash import get_password_hash
+from utils.security.hash import get_password_hash
 
 
 def get_user_by_email(db: Session, email: str):
