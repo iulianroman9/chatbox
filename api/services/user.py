@@ -1,14 +1,14 @@
 from sqlalchemy.orm import Session
 from db.models import UserRecord
-from models.user import UserCreate, UserUpdate
+from models.user import UserUpdate
 from utils.security.hash import get_password_hash
 
 
-def get_user_by_email(db: Session, email: str):
+def get_user_by_email(email: str, db: Session):
     return db.query(UserRecord).filter(UserRecord.email == email).first()
 
 
-def get_user(db: Session, user_id: int):
+def get_user(user_id: int, db: Session):
     return db.query(UserRecord).filter(UserRecord.id == user_id).first()
 
 
@@ -16,25 +16,7 @@ def get_all_users(db: Session):
     return db.query(UserRecord).all()
 
 
-def create_user(db: Session, user_create: UserCreate):
-    pass_hash = get_password_hash(user_create.password)
-
-    user = UserRecord(
-        email=user_create.email,
-        name=user_create.name,
-        phone=user_create.phone,
-        avatar_url=str(user_create.avatar_url) if user_create.avatar_url else None,
-        password_hash=pass_hash,
-    )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return user
-
-
-def update_user(db: Session, user_id: int, user_update: UserUpdate):
+def update_user(user_id: int, user_update: UserUpdate, db: Session):
     user = get_user(db, user_id)
     if not user:
         return None
@@ -53,7 +35,7 @@ def update_user(db: Session, user_id: int, user_update: UserUpdate):
     return user
 
 
-def delete_user(db: Session, user_id: int):
+def delete_user(user_id: int, db: Session):
     user = get_user(db, user_id)
     if not user:
         return False
