@@ -24,3 +24,8 @@ class UserResponse(BaseModel):
     phone: str | None = None
     avatar_url: HttpUrl | str | None = None
     created_at: datetime
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=64)
