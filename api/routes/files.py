@@ -1,41 +1,29 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pathlib import Path
+from sqlalchemy.orm import Session
+from db.database import get_db
 from db.models import UserRecord
+from models.file import FileResponse
 from api.services.auth import get_current_user
-
-UPLOAD_DIR = Path("files")
+from api.services.file import save_file_for_user
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
-    file: UploadFile = File(...), current_user: UserRecord = Depends(get_current_user)
+    file: UploadFile = File(...),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required."
         )
 
-    safe_name = Path(file.filename).name
-    user_dir = UPLOAD_DIR / str(current_user.id)
-    user_dir.mkdir(parents=True, exist_ok=True)
-    dest = user_dir / safe_name
-
-    content = await file.read()
-    dest.write_bytes(content)
+    db_file = await save_file_for_user(file, current_user, db)
 
     # TODO:
     """
-    - extract code in a function (api/services/file.py)
-    - generate random file name
-    - store a db record for the file
     - create remaining routes (list files, retrieve file info, retrieve file content)
     """
-
-    return {
-        "filename": safe_name,
-        "content_type": file.content_type or "application/octet-stream",
-        "size": len(content),
-        "path": str(dest),
-    }
+    return FileResponse.model_validate(db_file)
