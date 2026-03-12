@@ -5,7 +5,12 @@ from db.database import get_db
 from db.models import UserRecord
 from models.file import FileResponse
 from api.services.auth import get_current_user
-from api.services.file import save_file_for_user, get_file_by_id, get_files_for_user
+from api.services.file import (
+    save_file_for_user,
+    get_file_by_id,
+    get_files_for_user,
+    get_file_for_download,
+)
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
@@ -53,3 +58,18 @@ async def get_file_info(
         )
 
     return FileResponse.model_validate(db_file)
+
+
+@router.get("/{file_id}/content", response_class=FastAPIFileResponse)
+async def download_file(
+    file_id: int,
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_file = get_file_for_download(file_id, current_user.id, db)
+
+    return FastAPIFileResponse(
+        path=db_file.path,
+        filename=db_file.original_name,
+        media_type=db_file.content_type,
+    )

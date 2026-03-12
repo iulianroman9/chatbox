@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 from db.models import FileRecord, UserRecord
 
@@ -47,3 +47,22 @@ def get_file_by_id(file_id: int, user_id: int, db: Session) -> FileRecord | None
         .filter(FileRecord.id == file_id, FileRecord.user_id == user_id)
         .first()
     )
+
+
+def get_file_for_download(file_id: int, user_id: int, db: Session) -> FileRecord:
+    db_file = get_file_by_id(file_id, user_id, db)
+
+    if not db_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found or access denied.",
+        )
+
+    file_path = Path(db_file.path)
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File is missing from the server.",
+        )
+
+    return db_file
