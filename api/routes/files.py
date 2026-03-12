@@ -1,41 +1,75 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pathlib import Path
+from fastapi.responses import FileResponse as FastAPIFileResponse
+from sqlalchemy.orm import Session
+from db.database import get_db
 from db.models import UserRecord
+from models.file import FileResponse
 from api.services.auth import get_current_user
-
-UPLOAD_DIR = Path("files")
+from api.services.file import (
+    save_file_for_user,
+    get_file_by_id,
+    get_files_for_user,
+    get_file_for_download,
+)
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
-    file: UploadFile = File(...), current_user: UserRecord = Depends(get_current_user)
+    file: UploadFile = File(...),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required."
         )
 
-    safe_name = Path(file.filename).name
-    user_dir = UPLOAD_DIR / str(current_user.id)
-    user_dir.mkdir(parents=True, exist_ok=True)
-    dest = user_dir / safe_name
-
-    content = await file.read()
-    dest.write_bytes(content)
+    db_file = await save_file_for_user(file, current_user, db)
 
     # TODO:
     """
-    - extract code in a function (api/services/file.py)
-    - generate random file name
-    - store a db record for the file
-    - create remaining routes (list files, retrieve file info, retrieve file content)
+    - create remaining routes (retrieve file content)
     """
+    return FileResponse.model_validate(db_file)
 
-    return {
-        "filename": safe_name,
-        "content_type": file.content_type or "application/octet-stream",
-        "size": len(content),
-        "path": str(dest),
-    }
+
+@router.get("/", response_model=list[FileResponse])
+async def list_files(
+    current_user: UserRecord = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    files = get_files_for_user(current_user.id, db)
+    return [FileResponse.model_validate(f) for f in files]
+
+
+@router.get("/{file_id}", response_model=FileResponse)
+async def get_file_info(
+    file_id: int,
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_file = get_file_by_id(file_id, current_user.id, db)
+
+    if not db_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found or access denied.",
+        )
+
+    return FileResponse.model_validate(db_file)
+
+
+@router.get("/{file_id}/content", response_class=FastAPIFileResponse)
+async def download_file(
+    file_id: int,
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_file = get_file_for_download(file_id, current_user.id, db)
+
+    return FastAPIFileResponse(
+        path=db_file.path,
+        filename=db_file.original_name,
+        media_type=db_file.content_type,
+    )
