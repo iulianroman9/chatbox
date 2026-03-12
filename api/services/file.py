@@ -35,3 +35,15 @@ async def save_file_for_user(
     db.refresh(db_file)
 
     return db_file
+
+
+def get_files_for_user(user_id: int, db: Session) -> list[FileRecord]:
+    return db.query(FileRecord).filter(FileRecord.user_id == user_id).all()
+
+
+def get_file_by_id(file_id: int, user_id: int, db: Session) -> FileRecord | None:
+    return (
+        db.query(FileRecord)
+        .filter(FileRecord.id == file_id, FileRecord.user_id == user_id)
+        .first()
+    )
