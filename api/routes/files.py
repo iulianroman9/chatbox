@@ -27,11 +27,6 @@ async def upload_file(
         )
 
     db_file = await save_file_for_user(file, current_user, db)
-
-    # TODO:
-    """
-    - create remaining routes (retrieve file content)
-    """
     return FileResponse.model_validate(db_file)
 
 
