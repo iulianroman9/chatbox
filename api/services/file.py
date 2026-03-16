@@ -2,7 +2,8 @@ import uuid
 from pathlib import Path
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
-from db.models import FileRecord, UserRecord
+from sqlalchemy import func
+from db.models import FileContentRecord, FileRecord, UserRecord
 
 UPLOAD_DIR = Path("files")
 
@@ -16,11 +17,13 @@ async def save_file_for_user(
     user_dir = UPLOAD_DIR / str(current_user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
 
+    # write on disk (files/user_id/random_name)
     dest = user_dir / random_name
 
     content = await file.read()
     dest.write_bytes(content)
 
+    # store file metadata in files table
     db_file = FileRecord(
         user_id=current_user.id,
         original_name=safe_original_name,
@@ -33,6 +36,15 @@ async def save_file_for_user(
     db.add(db_file)
     db.commit()
     db.refresh(db_file)
+
+    # store file content as tsvector in postgres
+    text_content = content.decode("utf-8", errors="ignore")
+    content_record = FileContentRecord(
+        file_id=db_file.id, content_tsv=func.to_tsvector("english", text_content)
+    )
+
+    db.add(content_record)
+    db.commit()
 
     return db_file
 
