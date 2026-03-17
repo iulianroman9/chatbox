@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse as FastAPIFileResponse
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import UserRecord
-from models.file import FileResponse
+from models.file import FileResponse, FileSearchResponse
 from api.services.auth import get_current_user
 from api.services.file import (
     save_file_for_user,
@@ -11,6 +11,7 @@ from api.services.file import (
     get_files_for_user,
     get_file_for_download,
     search_user_files,
+    search_user_files_embedding,
 )
 
 router = APIRouter(prefix="/files", tags=["Files"])
@@ -39,17 +40,42 @@ async def list_files(
     return [FileResponse.model_validate(f) for f in files]
 
 
-@router.get("/search", response_model=list[FileResponse])
+@router.get("/search", response_model=list[FileSearchResponse])
 async def search_files(
     query: str = Query(..., description="Search query string"),
     current_user: UserRecord = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not query.strip():
-        return []
+    try:
+        results = search_user_files(query, current_user.id, db)
+        return results
 
-    files = search_user_files(query, current_user.id, db)
-    return [FileResponse.model_validate(f) for f in files]
+    except Exception as e:
+        print(f"Error during file search: {e}")
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while searching your files.",
+        )
+
+
+@router.get("/search-embedding", response_model=list[FileSearchResponse])
+async def search_files_embedding(
+    query: str = Query(..., description="Search query string"),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        results = search_user_files_embedding(query, current_user.id, db)
+        return results
+
+    except Exception as e:
+        print(f"Error during file search: {e}")
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while searching your files.",
+        )
 
 
 @router.get("/{file_id}", response_model=FileResponse)

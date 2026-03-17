@@ -11,3 +11,9 @@ class FileResponse(BaseModel):
     content_type: str
     size: int
     created_at: datetime
+
+
+class FileSearchResponse(FileResponse):
+    model_config = ConfigDict(from_attributes=True)
+
+    rank: float

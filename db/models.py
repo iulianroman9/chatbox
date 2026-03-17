@@ -1,6 +1,7 @@
 from sqlalchemy import Column, DateTime, Integer, String, func, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import TSVECTOR
+from pgvector.sqlalchemy import Vector
 from db.database import Base
 
 
@@ -31,10 +32,9 @@ class FileRecord(Base):
     path = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     owner = relationship("UserRecord", back_populates="files")
-    content = relationship(
+    contents = relationship(
         "FileContentRecord",
         back_populates="file",
-        uselist=False,
         cascade="all, delete-orphan",
     )
 
@@ -42,11 +42,13 @@ class FileRecord(Base):
 class FileContentRecord(Base):
     __tablename__ = "file_content"
 
-    file_id = Column(Integer, ForeignKey("files.id"), primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
     content_tsv = Column(TSVECTOR, nullable=False)
+    embedding = Column(Vector(2048), nullable=False)
 
     __table_args__ = (
         Index("ix_file_content_content_tsv", "content_tsv", postgresql_using="gin"),
     )
 
-    file = relationship("FileRecord", back_populates="content")
+    file = relationship("FileRecord", back_populates="contents")
