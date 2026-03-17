@@ -4,7 +4,7 @@ from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from db.models import FileContentRecord, FileRecord, UserRecord
-from utils.embeddings import get_embeddings
+from utils.embeddings import get_embeddings, get_query_embedding
 
 UPLOAD_DIR = Path("files")
 
@@ -112,6 +112,44 @@ def get_file_for_download(file_id: int, user_id: int, db: Session) -> FileRecord
         )
 
     return db_file
+
+
+def search_user_files_embedding(query_string: str, user_id: int, db: Session):
+    query_vector = get_query_embedding(query_string)
+
+    similarity = (1 - FileContentRecord.embedding.cosine_distance(query_vector)).label(
+        "similarity"
+    )
+
+    matching_chunks = (
+        db.query(FileContentRecord, similarity)
+        .join(FileRecord)
+        .filter(FileRecord.user_id == user_id)
+        .order_by(similarity.desc())
+        .all()
+    )
+
+    unique_files = []
+    seen_file_ids = set()
+
+    for chunk, chunk_rank in matching_chunks:
+        if chunk.file_id not in seen_file_ids:
+            file_record = chunk.file
+
+            search_result = {
+                "id": file_record.id,
+                "original_name": file_record.original_name,
+                "generated_name": file_record.generated_name,
+                "content_type": file_record.content_type,
+                "size": file_record.size,
+                "created_at": file_record.created_at,
+                "rank": chunk_rank,
+            }
+
+            unique_files.append(search_result)
+            seen_file_ids.add(chunk.file_id)
+
+    return unique_files
 
 
 def search_user_files(query_string: str, user_id: int, db: Session):

@@ -11,6 +11,7 @@ from api.services.file import (
     get_files_for_user,
     get_file_for_download,
     search_user_files,
+    search_user_files_embedding,
 )
 
 router = APIRouter(prefix="/files", tags=["Files"])
@@ -47,6 +48,25 @@ async def search_files(
 ):
     try:
         results = search_user_files(query, current_user.id, db)
+        return results
+
+    except Exception as e:
+        print(f"Error during file search: {e}")
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while searching your files.",
+        )
+
+
+@router.get("/search-embedding", response_model=list[FileSearchResponse])
+async def search_files_embedding(
+    query: str = Query(..., description="Search query string"),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        results = search_user_files_embedding(query, current_user.id, db)
         return results
 
     except Exception as e:
