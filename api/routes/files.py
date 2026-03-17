@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from fastapi.responses import FileResponse as FastAPIFileResponse
 from sqlalchemy.orm import Session
 from db.database import get_db
@@ -10,6 +10,7 @@ from api.services.file import (
     get_file_by_id,
     get_files_for_user,
     get_file_for_download,
+    search_user_files,
 )
 
 router = APIRouter(prefix="/files", tags=["Files"])
@@ -35,6 +36,19 @@ async def list_files(
     current_user: UserRecord = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     files = get_files_for_user(current_user.id, db)
+    return [FileResponse.model_validate(f) for f in files]
+
+
+@router.get("/search", response_model=list[FileResponse])
+async def search_files(
+    query: str = Query(..., description="Search query string"),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not query.strip():
+        return []
+
+    files = search_user_files(query, current_user.id, db)
     return [FileResponse.model_validate(f) for f in files]
 
 

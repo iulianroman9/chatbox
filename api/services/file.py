@@ -78,3 +78,17 @@ def get_file_for_download(file_id: int, user_id: int, db: Session) -> FileRecord
         )
 
     return db_file
+
+
+def search_user_files(query_string: str, user_id: int, db: Session) -> list[FileRecord]:
+    return (
+        db.query(FileRecord)
+        .join(FileContentRecord)
+        .filter(
+            FileRecord.user_id == user_id,
+            FileContentRecord.content_tsv.op("@@")(
+                func.websearch_to_tsquery("english", query_string)
+            ),
+        )
+        .all()
+    )
