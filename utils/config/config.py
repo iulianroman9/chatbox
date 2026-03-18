@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     sqlite_database_url: str | None = None
     pg_database_url: str | None = None
     voyage_api_key: str | None = None
+    groq_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

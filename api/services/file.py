@@ -1,4 +1,5 @@
 import uuid
+import re
 from pathlib import Path
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
@@ -64,10 +65,11 @@ async def save_file_for_user(
             embeddings = get_embeddings(chunks)
 
             content_records = []
-            for chunk, embedding in zip(chunks, embeddings):
+            for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 content_records.append(
                     FileContentRecord(
                         file_id=db_file.id,
+                        chunk_index=index,
                         content_tsv=func.to_tsvector("english", chunk),
                         embedding=embedding,
                     )
@@ -144,6 +146,7 @@ def search_user_files_embedding(query_string: str, user_id: int, db: Session):
                 "size": file_record.size,
                 "created_at": file_record.created_at,
                 "rank": chunk_rank,
+                "chunk_index": chunk.chunk_index,
             }
 
             unique_files.append(search_result)
@@ -185,6 +188,7 @@ def search_user_files(query_string: str, user_id: int, db: Session):
                 "size": file_record.size,
                 "created_at": file_record.created_at,
                 "rank": chunk_rank,
+                "chunk_index": chunk.chunk_index,
             }
 
             unique_files.append(search_result)
@@ -193,16 +197,42 @@ def search_user_files(query_string: str, user_id: int, db: Session):
     return unique_files
 
 
-def get_text_chunks(text: str, chunk_size: int = 100, overlap: int = 20) -> list[str]:
-    if not text:
+# def get_text_chunks(text: str, chunk_size: int = 100, overlap: int = 20) -> list[str]:
+#     if not text:
+#         return []
+
+#     chunks = []
+#     start = 0
+
+#     while start < len(text):
+#         end = start + chunk_size
+#         chunks.append(text[start:end])
+#         start += chunk_size - overlap
+
+#     return chunks
+
+
+def get_text_chunks(
+    text: str, max_sentences_per_chunk=3, overlap_sentences=1
+) -> list[str]:
+    if not text or not text.strip():
         return []
 
-    chunks = []
-    start = 0
+    if overlap_sentences >= max_sentences_per_chunk:
+        raise ValueError(
+            "overlap_sentences must be strictly less than max_sentences_per_chunk"
+        )
 
-    while start < len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start += chunk_size - overlap
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    sentences = [s for s in sentences if s]
+
+    chunks = []
+    start_idx = 0
+
+    while start_idx < len(sentences):
+        end_idx = min(start_idx + max_sentences_per_chunk, len(sentences))
+        chunks.append(" ".join(sentences[start_idx:end_idx]))
+
+        start_idx += max_sentences_per_chunk - overlap_sentences
 
     return chunks
