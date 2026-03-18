@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import UserRecord
 from models.file import FileResponse, FileSearchResponse
+from models.llm import LlmResponse
 from api.services.auth import get_current_user
 from api.services.file import (
     save_file_for_user,
@@ -13,6 +14,7 @@ from api.services.file import (
     search_user_files,
     search_user_files_embedding,
     search_files_hybrid,
+    generate_answer_from_files,
 )
 
 router = APIRouter(prefix="/files", tags=["Files"])
@@ -92,6 +94,23 @@ async def search_my_files(
         print(f"Search Error: {e}")
         raise HTTPException(
             status_code=500, detail="An error occurred while searching files."
+        )
+
+
+@router.get("/search-to-llm", response_model=LlmResponse)
+async def answer_from_files(
+    query: str = Query(..., description="The user's question about their files"),
+    current_user: UserRecord = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = generate_answer_from_files(query, current_user.id, db)
+        return LlmResponse.model_validate(result)
+
+    except Exception as e:
+        print(f"RAG Endpoint Error: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to generate an AI answer from the files."
         )
 
 

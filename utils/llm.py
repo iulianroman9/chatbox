@@ -10,6 +10,7 @@ def generate_rag_answer(context_text: str, user_query: str) -> str:
     or answer questions for the user based on relevant context. 
     If the answer is not in the context, clearly state that you do not have enough information.
     Always cite the Source file name when providing information.
+    WRITE PLAINTEXT NOT MARKDOWN
 
     CONTEXT:
     {context_text}

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from db.models import FileContentRecord, FileRecord, UserRecord
 from utils.embeddings import get_embeddings, get_query_embedding
+from utils.llm import generate_rag_answer
 
 UPLOAD_DIR = Path("files")
 
@@ -333,3 +334,39 @@ def search_files_hybrid(query_string: str, user_id: int, db: Session, limit: int
             seen_file_ids.add(chunk.file_id)
 
     return unique_files
+
+
+def generate_answer_from_files(query_string: str, user_id: int, db: Session) -> dict:
+    top_chunks_with_scores = search_chunks_hybrid(query_string, user_id, db, limit=5)
+
+    if not top_chunks_with_scores:
+        return {
+            "answer": "I couldn't find any relevant documents in your files to answer this.",
+            "sources": [],
+        }
+
+    context_blocks = []
+    sources_used = []
+
+    for chunk_record, score in top_chunks_with_scores:
+        chunk_text = fetch_chunk_from_disk(
+            file_path=chunk_record.file.path, chunk_index=chunk_record.chunk_index
+        )
+
+        if chunk_text:
+            file_name = chunk_record.file.original_name
+            context_blocks.append(f"--- Source: {file_name} ---\n{chunk_text}")
+
+            if not any(s["id"] == chunk_record.file.id for s in sources_used):
+                sources_used.append(
+                    {
+                        "file": file_name,
+                        "id": chunk_record.file.id,
+                        "hybrid_score": round(score, 4),
+                    }
+                )
+
+    combined_context = "\n\n".join(context_blocks)
+    answer = generate_rag_answer(context_text=combined_context, user_query=query_string)
+
+    return {"answer": answer, "sources": sources_used}
