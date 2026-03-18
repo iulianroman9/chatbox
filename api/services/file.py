@@ -7,6 +7,9 @@ from sqlalchemy import func, desc
 from db.models import FileContentRecord, FileRecord, UserRecord
 from utils.embeddings import get_embeddings, get_query_embedding
 from utils.llm import generate_rag_answer
+from utils.text import get_text_chunks
+from utils.file_system import save_to_disk, fetch_chunk_from_disk
+from utils.ranking import compute_rrf
 
 UPLOAD_DIR = Path("files")
 
@@ -58,6 +61,12 @@ async def save_file_for_user(
         )
 
     # store file in chunks as tsvector and pgvector embedding
+    _process_file_embeddings(db_file.id, content, db)
+
+    return db_file
+
+
+def _process_file_embeddings(file_id: int, content: bytes, db: Session):
     try:
         text_content = content.decode("utf-8", errors="ignore")
         chunks = get_text_chunks(text_content)
@@ -69,7 +78,7 @@ async def save_file_for_user(
             for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 content_records.append(
                     FileContentRecord(
-                        file_id=db_file.id,
+                        file_id=file_id,
                         chunk_index=index,
                         content_tsv=func.to_tsvector("english", chunk),
                         embedding=embedding,
@@ -81,9 +90,7 @@ async def save_file_for_user(
 
     except Exception as e:
         db.rollback()
-        print(f"processing failed for file {db_file.id}: {e}")
-
-    return db_file
+        print(f"Processing failed for file ID {file_id}: {e}")
 
 
 def get_files_for_user(user_id: int, db: Session) -> list[FileRecord]:
@@ -132,28 +139,7 @@ def search_user_files_embedding(query_string: str, user_id: int, db: Session):
         .all()
     )
 
-    unique_files = []
-    seen_file_ids = set()
-
-    for chunk, chunk_rank in matching_chunks:
-        if chunk.file_id not in seen_file_ids:
-            file_record = chunk.file
-
-            search_result = {
-                "id": file_record.id,
-                "original_name": file_record.original_name,
-                "generated_name": file_record.generated_name,
-                "content_type": file_record.content_type,
-                "size": file_record.size,
-                "created_at": file_record.created_at,
-                "rank": chunk_rank,
-                "chunk_index": chunk.chunk_index,
-            }
-
-            unique_files.append(search_result)
-            seen_file_ids.add(chunk.file_id)
-
-    return unique_files
+    return _format_search_results(matching_chunks)
 
 
 def search_user_files(query_string: str, user_id: int, db: Session):
@@ -174,6 +160,10 @@ def search_user_files(query_string: str, user_id: int, db: Session):
         .all()
     )
 
+    return _format_search_results(matching_chunks)
+
+
+def _format_search_results(matching_chunks):
     unique_files = []
     seen_file_ids = set()
 
@@ -181,62 +171,21 @@ def search_user_files(query_string: str, user_id: int, db: Session):
         if chunk.file_id not in seen_file_ids:
             file_record = chunk.file
 
-            search_result = {
-                "id": file_record.id,
-                "original_name": file_record.original_name,
-                "generated_name": file_record.generated_name,
-                "content_type": file_record.content_type,
-                "size": file_record.size,
-                "created_at": file_record.created_at,
-                "rank": chunk_rank,
-                "chunk_index": chunk.chunk_index,
-            }
-
-            unique_files.append(search_result)
+            unique_files.append(
+                {
+                    "id": file_record.id,
+                    "original_name": file_record.original_name,
+                    "generated_name": file_record.generated_name,
+                    "content_type": file_record.content_type,
+                    "size": file_record.size,
+                    "created_at": file_record.created_at,
+                    "rank": chunk_rank,
+                    "chunk_index": chunk.chunk_index,
+                }
+            )
             seen_file_ids.add(chunk.file_id)
 
     return unique_files
-
-
-# def get_text_chunks(text: str, chunk_size: int = 100, overlap: int = 20) -> list[str]:
-#     if not text:
-#         return []
-
-#     chunks = []
-#     start = 0
-
-#     while start < len(text):
-#         end = start + chunk_size
-#         chunks.append(text[start:end])
-#         start += chunk_size - overlap
-
-#     return chunks
-
-
-def get_text_chunks(
-    text: str, max_sentences_per_chunk=3, overlap_sentences=1
-) -> list[str]:
-    if not text or not text.strip():
-        return []
-
-    if overlap_sentences >= max_sentences_per_chunk:
-        raise ValueError(
-            "overlap_sentences must be strictly less than max_sentences_per_chunk"
-        )
-
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    sentences = [s for s in sentences if s]
-
-    chunks = []
-    start_idx = 0
-
-    while start_idx < len(sentences):
-        end_idx = min(start_idx + max_sentences_per_chunk, len(sentences))
-        chunks.append(" ".join(sentences[start_idx:end_idx]))
-
-        start_idx += max_sentences_per_chunk - overlap_sentences
-
-    return chunks
 
 
 def search_chunks_hybrid(query_string: str, user_id: int, db: Session, limit: int = 5):
@@ -244,6 +193,7 @@ def search_chunks_hybrid(query_string: str, user_id: int, db: Session, limit: in
         return []
 
     query_vector = get_query_embedding(query_string)
+
     vector_results = (
         db.query(FileContentRecord)
         .join(FileRecord)
@@ -266,43 +216,7 @@ def search_chunks_hybrid(query_string: str, user_id: int, db: Session, limit: in
         .all()
     )
 
-    k = 60
-    rrf_scores = {}
-    chunk_map = {}
-
-    for rank, chunk in enumerate(vector_results):
-        rrf_scores[chunk.id] = rrf_scores.get(chunk.id, 0) + (1.0 / (k + rank + 1))
-        chunk_map[chunk.id] = chunk
-
-    for rank, chunk in enumerate(fts_results):
-        rrf_scores[chunk.id] = rrf_scores.get(chunk.id, 0) + (1.0 / (k + rank + 1))
-        chunk_map[chunk.id] = chunk
-
-    sorted_chunk_ids = sorted(rrf_scores, key=rrf_scores.get, reverse=True)[:limit]
-
-    return [
-        (chunk_map[chunk_id], rrf_scores[chunk_id]) for chunk_id in sorted_chunk_ids
-    ]
-
-
-def fetch_chunk_from_disk(file_path: str, chunk_index: int) -> str | None:
-    path = Path(file_path)
-
-    if not path.is_file():
-        return None
-
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-
-        chunks = get_text_chunks(text, max_sentences_per_chunk=3, overlap_sentences=1)
-
-        if 0 <= chunk_index < len(chunks):
-            return chunks[chunk_index]
-
-        return None
-    except Exception as e:
-        print(f"Failed to read chunk from disk for {file_path}: {e}")
-        return None
+    return compute_rrf(vector_results, fts_results)[:limit]
 
 
 def search_files_hybrid(query_string: str, user_id: int, db: Session, limit: int = 20):
