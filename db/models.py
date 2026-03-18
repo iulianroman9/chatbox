@@ -43,6 +43,7 @@ class FileContentRecord(Base):
     __tablename__ = "file_content"
 
     id = Column(Integer, primary_key=True, index=True)
+    chunk_index = Column(Integer, nullable=False, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
     content_tsv = Column(TSVECTOR, nullable=False)
     embedding = Column(Vector(2048), nullable=False)

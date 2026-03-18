@@ -5,10 +5,11 @@ from functools import lru_cache
 class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
+    access_token_expire_minutes: int = 2000
     sqlite_database_url: str | None = None
     pg_database_url: str | None = None
     voyage_api_key: str | None = None
+    groq_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
