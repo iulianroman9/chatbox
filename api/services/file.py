@@ -1,5 +1,4 @@
 import uuid
-import re
 from pathlib import Path
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,7 +7,7 @@ from db.models import FileContentRecord, FileRecord, UserRecord
 from utils.embeddings import get_embeddings, get_query_embedding
 from utils.llm import generate_rag_answer
 from utils.text import get_text_chunks
-from utils.file_system import save_to_disk, fetch_chunk_from_disk
+from utils.file_system import fetch_chunk_from_disk
 from utils.ranking import compute_rrf
 
 UPLOAD_DIR = Path("files")
